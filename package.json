@@ -4,6 +4,7 @@
   "description": "TimeX Check-in API Server",
   "main": "server.js",
   "scripts": {
+    "build": "npm install",
     "start": "node server.js",
     "dev": "node server.js"
   },
