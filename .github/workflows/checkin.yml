@@ -21,7 +21,7 @@ jobs:
         run: npm install
 
       - name: Run check-in
-        run: node server.js
+        run: node checkin.js
         env:
           EMPLOYEE_ID: ${{ secrets.TIMEX_EMPLOYEE_ID }}
           PASSWORD: ${{ secrets.TIMEX_PASSWORD }}
