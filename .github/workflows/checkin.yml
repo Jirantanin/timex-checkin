@@ -1,0 +1,31 @@
+name: TimeX Check-in
+
+on:
+  schedule:
+    - cron: '40 9 * * 1-5'  # 09:40 Mon-Fri (Asia/Bangkok = UTC+7, so 02:40 UTC)
+  workflow_dispatch:  # กดรันมือได้
+
+jobs:
+  checkin:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run check-in
+        run: node server.js
+        env:
+          EMPLOYEE_ID: ${{ secrets.TIMEX_EMPLOYEE_ID }}
+          PASSWORD: ${{ secrets.TIMEX_PASSWORD }}
+          SECRET_KEY: ${{ secrets.TIMEX_SECRET_KEY }}
+          LOCATION_LAT: ${{ secrets.TIMEX_LOCATION_LAT }}
+          LOCATION_LNG: ${{ secrets.TIMEX_LOCATION_LNG }}
+          LOCATION_NAME: ${{ secrets.TIMEX_LOCATION_NAME }}
