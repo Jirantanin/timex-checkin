@@ -1,49 +1,34 @@
-# TimeX API Server
+# TimeX Check-in Automation
 
-API server สำหรับเช็คอิน TimeX อัตโนมัติ — deploy บน Railway ได้เลย
+ระบบเช็คอิน TimeX อัตโนมัติด้วย GitHub Actions — รันเองทุกวันจันทร์-ศุกร์ 09:40 แล้วส่ง notification ไป Telegram
 
-## Deploy on Railway
+## วิธีตั้ง Secrets บน GitHub
 
-1. Fork repo นี้ไป GitHub
-2. ไปที่ [railway.app](https://railway.app) → New Project → Deploy from GitHub
-3. เลือก repo
-4. Set environment variables (ดูใน GitHub repo → Settings → Secrets):
-   - `EMPLOYEE_ID`
-   - `PASSWORD`
-   - `SECRET_KEY`
-   - `LOCATION_LAT`
-   - `LOCATION_LNG`
-   - `LOCATION_NAME`
-5. Deploy — เสร็จแล้วจะได้ URL เช่น `https://timex-api.up.railway.app`
+ไปที่ **Settings → Secrets and variables → Actions** ของ repo:
 
-## API Endpoints
+| Secret Name | คำอธิบาย |
+|-------------|----------|
+| `TELEGRAM_BOT_TOKEN` | Token ของ bot ที่จะส่ง notification |
+| `TELEGRAM_CHAT_ID` | Chat ID ที่จะรับ notification |
+| `EMPLOYEE_ID` | รหัสพนักงาน TimeX |
+| `PASSWORD` | รหัสผ่าน TimeX |
+| `SECRET_KEY` | Secret key สำหรับ OTP |
+| `LOCATION_LAT` | ละติจูดสถานที่เช็คอิน |
+| `LOCATION_LNG` | ลองจิจูดสถานที่เช็คอิน |
+| `LOCATION_NAME` | ชื่อสถานที่เช็คอิน |
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/health` | Health check |
-| POST | `/checkin` | เช็คอิน |
-| POST | `/checkout` | เช็คเอาต์ |
-| POST | `/history` | ดูประวัติเดือนนี้ |
+## วิธีรัน
 
-## ใช้งาน
+### Auto (GitHub Actions)
+Workflow รันอัตโนมัติทุกวันจันทร์-ศุกร์ **09:40** (เวลาไทย)  
+ดูได้ที่ tab **Actions** ของ repo
 
-```bash
-# เช็คอิน
-curl -X POST https://your-railway-app.railway.app/checkin
+### Manual
+ไปที่ **Actions → TimeX Check-in → Run workflow**
 
-# เช็คเอาต์
-curl -X POST https://your-railway-app.railway.app/checkout
+## ไฟล์สำคัญ
 
-# ดูประวัติ
-curl -X POST https://your-railway-app.railway.app/history
-```
-
-## GitHub Actions Cron
-
-ตั้งเวลาให้รันทุกวันจันทร์-ศุกร์ 09:40 — workflow อยู่ที่ `.github/workflows/checkin.yml`
-
-ต้องตั้ง Secrets บน GitHub:
-- `TELEGRAM_BOT_TOKEN` — bot token สำหรับส่ง notification
-- `TELEGRAM_CHAT_ID` — chat ID ที่จะรับ noti
-- `EMPLOYEE_ID`, `PASSWORD`, `SECRET_KEY` — ข้อมูล TimeX
-- `LOCATION_LAT`, `LOCATION_LNG`, `LOCATION_NAME` — พิกัดสถานที่
+| ไฟล์ | คำอธิบาย |
+|------|----------|
+| `checkin.js` | Script หลักสำหรับเช็คอิน |
+| `.github/workflows/checkin.yml` | GitHub Actions workflow |
