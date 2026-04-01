@@ -1,6 +1,13 @@
 # TimeX Check-in Automation
 
-ระบบเช็คอิน TimeX อัตโนมัติด้วย GitHub Actions — รันเองทุกวันจันทร์-ศุกร์ 09:40 แล้วส่ง notification ไป Telegram
+ระบบเช็คอิน/เช็คเอาต์ TimeX อัตโนมัติด้วย GitHub Actions — รันเองทุกวันจันทร์-ศุกร์ แล้วส่ง notification ไป Telegram
+
+## เวลาทำงาน
+
+| Event | เวลา (ไทย) |
+|-------|-----------|
+| Check-in | 09:40 จันทร์-ศุกร์ |
+| Check-out | 18:40 จันทร์-ศุกร์ |
 
 ## วิธีตั้ง Secrets บน GitHub
 
@@ -13,9 +20,9 @@
 | `EMPLOYEE_ID` | รหัสพนักงาน TimeX |
 | `PASSWORD` | รหัสผ่าน TimeX |
 | `SECRET_KEY` | Secret key สำหรับ OTP |
-| `LOCATION_LAT` | ละติจูดสถานที่เช็คอิน |
-| `LOCATION_LNG` | ลองจิจูดสถานที่เช็คอิน |
-| `LOCATION_NAME` | ชื่อสถานที่เช็คอิน |
+| `LOCATION_LAT` | ละติจูดสถานที่เช็คอิน/เช็คเอาต์ |
+| `LOCATION_LNG` | ลองจิจูดสถานที่เช็คอิน/เช็คเอาต์ |
+| `LOCATION_NAME` | ชื่อสถานที่เช็คอิน/เช็คเอาต์ |
 
 ### วิธีได้ Telegram Bot Token
 1. ไปที่ **@BotFather** บน Telegram
@@ -33,15 +40,16 @@
 ## วิธีรัน
 
 ### Auto (GitHub Actions)
-Workflow รันอัตโนมัติทุกวันจันทร์-ศุกร์ **09:40** (เวลาไทย)  
-ดูได้ที่ tab **Actions** ของ repo
+รันอัตโนมัติตามตารางด้านบน ดูได้ที่ tab **Actions**
 
 ### Manual
-ไปที่ **Actions → TimeX Check-in → Run workflow**
+ไปที่ **Actions → TimeX Check-in / TimeX Check-out → Run workflow**
 
 ## ไฟล์สำคัญ
 
 | ไฟล์ | คำอธิบาย |
 |------|----------|
-| `checkin.js` | Script หลักสำหรับเช็คอิน |
-| `.github/workflows/checkin.yml` | GitHub Actions workflow |
+| `checkin.js` | Script เช็คอิน |
+| `checkout.js` | Script เช็คเอาต์ |
+| `.github/workflows/checkin.yml` | Workflow เช็คอิน (09:40) |
+| `.github/workflows/checkout.yml` | Workflow เช็คเอาต์ (18:40) |
