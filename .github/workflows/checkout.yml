@@ -1,0 +1,56 @@
+name: TimeX Check-out
+
+on:
+  schedule:
+    - cron: '40 18 * * 1-5'  # 18:40 Mon-Fri (Asia/Bangkok = UTC+7, so 11:40 UTC)
+  workflow_dispatch:  # กดรันมือได้
+
+jobs:
+  checkout:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run check-out
+        id: checkout
+        run: |
+          node checkout.js 2>&1 | tee checkout.log
+          echo "exit_code=$?" >> $GITHUB_OUTPUT
+        env:
+          EMPLOYEE_ID: ${{ secrets.TIMEX_EMPLOYEE_ID }}
+          PASSWORD: ${{ secrets.TIMEX_PASSWORD }}
+          SECRET_KEY: ${{ secrets.TIMEX_SECRET_KEY }}
+          LOCATION_LAT: ${{ secrets.TIMEX_LOCATION_LAT }}
+          LOCATION_LNG: ${{ secrets.TIMEX_LOCATION_LNG }}
+          LOCATION_NAME: ${{ secrets.TIMEX_LOCATION_NAME }}
+
+      - name: Notify Success
+        if: success()
+        run: |
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+            -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+            -d text="✅ TimeX Check-out สำเร็จค่ะ ($(date '+%H:%M:%S'))"
+
+      - name: Notify Failure
+        if: failure()
+        run: |
+          # Get error from Result JSON
+          ERROR_DETAIL=$(grep '"error":' checkout.log | head -1 | sed 's/.*"error": *"\?//' | sed 's/"\?.*//')
+          if [ -z "$ERROR_DETAIL" ]; then
+            ERROR_DETAIL=$(grep -E "❌|Error:" checkout.log | head -1 | sed 's/❌//g' | sed 's/Error://g' | xargs)
+          fi
+          if [ -z "$ERROR_DETAIL" ]; then
+            ERROR_DETAIL="ไม่ทราบสาเหตุ"
+          fi
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+            -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+            -d text="❌ TimeX Check-out ล้มเหลวค่ะ ($(date '+%H:%M:%S'))\nสาเหตุ: $ERROR_DETAIL"
