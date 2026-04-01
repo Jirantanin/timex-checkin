@@ -2,16 +2,21 @@ const OTPAuth = require('otpauth');
 
 // ========== CONFIG ==========
 const CONFIG = {
-  EMPLOYEE_ID: process.env.EMPLOYEE_ID || '61019',
-  PASSWORD: process.env.PASSWORD || 'N@029ii2',
-  SECRET_KEY: process.env.SECRET_KEY || 'FOPVPLL3QRLSSA2Q',
+  EMPLOYEE_ID: process.env.EMPLOYEE_ID,
+  PASSWORD: process.env.PASSWORD,
+  SECRET_KEY: process.env.SECRET_KEY,
   API_BASE: 'https://timex.techsoftholding.co.th/LeaveSystemAPI/api',
   LOCATION: {
-    lat: parseFloat(process.env.LOCATION_LAT || '13.79177234'),
-    lng: parseFloat(process.env.LOCATION_LNG || '100.57600597'),
-    name: process.env.LOCATION_NAME || 'รัชดาภิเษก 20'
+    lat: parseFloat(process.env.LOCATION_LAT),
+    lng: parseFloat(process.env.LOCATION_LNG),
+    name: process.env.LOCATION_NAME
   }
 };
+
+if (!CONFIG.EMPLOYEE_ID || !CONFIG.PASSWORD || !CONFIG.SECRET_KEY) {
+  console.error('❌ Missing required env: EMPLOYEE_ID, PASSWORD, SECRET_KEY');
+  process.exit(1);
+}
 // ============================
 
 async function httpPost(path, data, token = null) {
