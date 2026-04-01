@@ -31,20 +31,6 @@ async function httpPost(path, data, token = null) {
   return { status: res.status, body: await res.json() };
 }
 
-async function httpGet(path, token, params = {}) {
-  const url = new URL(CONFIG.API_BASE + path);
-  Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
-  
-  const res = await fetch(url.toString(), {
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`
-    }
-  });
-  return { status: res.status, body: await res.json() };
-}
-
 function generateOTP() {
   let totp = new OTPAuth.TOTP({
     issuer: 'LeaveSystem',
@@ -82,20 +68,6 @@ async function checkin() {
     return { success: false, error: 'OTP verify failed' };
   }
   const token = verify.body.token;
-
-  console.log('📊 ตรวจสอบสถานะ...');
-  const now = new Date();
-  const history = await httpGet('/Attendance/history', token, {
-    month: now.getMonth() + 1,
-    year: now.getFullYear()
-  });
-  const today = history.body?.find(h => h.workDate.startsWith(now.toISOString().split('T')[0]));
-
-  if (today?.checkInTime && !today?.checkOutTime) {
-    console.log('⚠️ ยังไม่ได้เช็คเอาต์ - กำลังเช็คเอาต์ก่อน...');
-    await httpPost('/Attendance/checkout', { userId: CONFIG.EMPLOYEE_ID }, token);
-    await new Promise(r => setTimeout(r, 2000));
-  }
 
   console.log(`📍 Check-in: ${CONFIG.LOCATION.name} (${CONFIG.LOCATION.lat}, ${CONFIG.LOCATION.lng})`);
   const ci = await httpPost('/Attendance/checkin', {
