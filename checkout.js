@@ -63,11 +63,11 @@ function isTodayHoliday(holidays) {
   });
 }
 
-function hasApprovedLeaveToday(leaves) {
+function hasApprovedOrPendingLeaveToday(leaves) {
   const today = new Date();
   const todayStr = toDateStr(today);
   return leaves.find(l => {
-    if (l.status !== 'Approved') return false;
+    if (!['Approved', 'Pending'].includes(l.status)) return false;
     const start = new Date(l.startDate).toISOString().split('T')[0];
     const end = new Date(l.endDate).toISOString().split('T')[0];
     return todayStr >= start && todayStr <= end;
@@ -84,14 +84,15 @@ async function checkPreConditions() {
     return { skipped: true, reason: `วันหยุด: ${holiday.holidayName}` };
   }
 
-  // Check approved leave
-  console.log('🔵 เช็ควันลาที่ได้อนุมัติ...');
+  // Check approved or pending leave
+  console.log('🔵 เช็ควันลา...');
   const leavesRes = await httpGet(`/Leave/User/${CONFIG.EMPLOYEE_ID}`);
   const leaves = leavesRes.body || [];
-  const leave = hasApprovedLeaveToday(leaves);
+  const leave = hasApprovedOrPendingLeaveToday(leaves);
   if (leave) {
-    console.log(`⏭️ วันนี้ตรงกับ "${leave.leaveTypeName || leave.typeName}" (${leave.startDate} ถึง ${leave.endDate}) — ข้าม check-out`);
-    return { skipped: true, reason: `${leave.leaveTypeName || leave.typeName}: ${leave.reason}` };
+    const statusText = leave.status === 'Pending' ? 'รออนุมัติ' : 'อนุมัติแล้ว';
+    console.log(`⏭️ วันนี้ตรงกับ "${leave.leaveTypeName || leave.typeName}" (${statusText}) — ข้าม check-out`);
+    return { skipped: true, reason: `${leave.leaveTypeName || leave.typeName} (${statusText}): ${leave.reason}` };
   }
 
   return { skipped: false };
