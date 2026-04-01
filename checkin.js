@@ -51,7 +51,7 @@ async function checkin() {
   });
   if (login.status !== 200) {
     console.log('❌ Login failed:', login.body);
-    return { success: false, error: 'Login failed' };
+    return { success: false, error: 'Login failed', detail: login.body };
   }
 
   console.log('🔑 Generate OTP...');
@@ -65,7 +65,7 @@ async function checkin() {
   });
   if (verify.status !== 200 || !verify.body.token) {
     console.log('❌ OTP verify failed:', verify.body);
-    return { success: false, error: 'OTP verify failed' };
+    return { success: false, error: 'OTP verify failed', detail: verify.body };
   }
   const token = verify.body.token;
 
@@ -82,7 +82,7 @@ async function checkin() {
     return { success: true, message: 'Check-in สำเร็จ!', detail: ci.body };
   } else {
     console.log('❌ Check-in failed:', ci.body);
-    return { success: false, error: ci.body.message || 'Check-in failed', detail: ci.body };
+    return { success: false, error: ci.body?.message || ci.body || 'Check-in failed', detail: ci.body };
   }
 }
 
