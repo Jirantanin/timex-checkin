@@ -2,12 +2,14 @@ name: TimeX Check-out
 
 on:
   schedule:
-    - cron: '40 18 * * 1-5'  # 18:40 Mon-Fri (Asia/Bangkok = UTC+7, so 11:40 UTC)
+    - cron: '40 11 * * 1-5'  # 18:40 Mon-Fri Asia/Bangkok = 11:40 UTC
   workflow_dispatch:  # กดรันมือได้
 
 jobs:
   checkout:
     runs-on: ubuntu-latest
+    env:
+      TZ: Asia/Bangkok
     steps:
       - name: Checkout
         uses: actions/checkout@v4
