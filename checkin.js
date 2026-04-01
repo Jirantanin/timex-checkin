@@ -22,11 +22,19 @@ if (!CONFIG.EMPLOYEE_ID || !CONFIG.PASSWORD || !CONFIG.SECRET_KEY) {
 async function httpPost(path, data, token = null) {
   const headers = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = `Bearer ${token}`;
-  
+
   const res = await fetch(CONFIG.API_BASE + path, {
     method: 'POST',
     headers,
     body: JSON.stringify(data)
+  });
+  return { status: res.status, body: await res.json() };
+}
+
+async function httpGet(path) {
+  const res = await fetch(CONFIG.API_BASE + path, {
+    method: 'GET',
+    headers: { 'Content-Type': 'application/json' }
   });
   return { status: res.status, body: await res.json() };
 }
@@ -43,7 +51,59 @@ function generateOTP() {
   return totp.generate();
 }
 
+function toDateStr(date) {
+  return date.toISOString().split('T')[0];
+}
+
+function isTodayHoliday(holidays) {
+  const today = toDateStr(new Date());
+  return holidays.find(h => {
+    const holDate = new Date(h.holidayDate).toISOString().split('T')[0];
+    return holDate === today;
+  });
+}
+
+function hasApprovedLeaveToday(leaves) {
+  const today = new Date();
+  const todayStr = toDateStr(today);
+  return leaves.find(l => {
+    if (l.status !== 'Approved') return false;
+    const start = new Date(l.startDate).toISOString().split('T')[0];
+    const end = new Date(l.endDate).toISOString().split('T')[0];
+    return todayStr >= start && todayStr <= end;
+  });
+}
+
+async function checkPreConditions() {
+  // Check holiday
+  console.log('🔵 เช็ควันหยุด...');
+  const holidaysRes = await httpGet('/leave/holidays');
+  const holiday = isTodayHoliday(holidaysRes.body || []);
+  if (holiday) {
+    console.log(`⏭️ วันนี้ (${holiday.holidayDate}) ตรงกับ "${holiday.holidayName}" — ข้าม check-in`);
+    return { skipped: true, reason: `วันหยุด: ${holiday.holidayName}` };
+  }
+
+  // Check approved leave
+  console.log('🔵 เช็ควันลาที่ได้อนุมัติ...');
+  const leavesRes = await httpGet(`/Leave/User/${CONFIG.EMPLOYEE_ID}`);
+  const leaves = leavesRes.body || [];
+  const leave = hasApprovedLeaveToday(leaves);
+  if (leave) {
+    console.log(`⏭️ วันนี้ตรงกับ "${leave.leaveTypeName || leave.typeName}" (${leave.startDate} ถึง ${leave.endDate}) — ข้าม check-in`);
+    return { skipped: true, reason: `${leave.leaveTypeName || leave.typeName}: ${leave.reason}` };
+  }
+
+  return { skipped: false };
+}
+
 async function checkin() {
+  // Pre-check: holiday & approved leave
+  const pre = await checkPreConditions();
+  if (pre.skipped) {
+    return { success: true, skipped: true, message: pre.reason };
+  }
+
   console.log('🔵 Login...');
   const login = await httpPost('/auth/login', {
     userId: CONFIG.EMPLOYEE_ID,
