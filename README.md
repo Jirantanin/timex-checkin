@@ -17,6 +17,19 @@
 | `LOCATION_LNG` | ลองจิจูดสถานที่เช็คอิน |
 | `LOCATION_NAME` | ชื่อสถานที่เช็คอิน |
 
+### วิธีได้ Telegram Bot Token
+1. ไปที่ **@BotFather** บน Telegram
+2. ส่ง `/newbot` แล้วตั้งชื่อ bot
+3. จะได้ token ประมาณ `123456789:ABCdef...`
+
+### วิธีได้ Telegram Chat ID
+1. เปิด chat กับ bot ที่สร้าง แล้วส่งข้อความอะไรก็ได้ไป
+2. เรียก API:
+   ```
+   https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates
+   ```
+3. ใน response จะเห็น `"id": 123456789` — นั่นคือ Chat ID ของตัวเอง
+
 ## วิธีรัน
 
 ### Auto (GitHub Actions)
