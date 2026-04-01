@@ -21,6 +21,7 @@ jobs:
         run: npm install
 
       - name: Run check-in
+        id: checkin
         run: node checkin.js
         env:
           EMPLOYEE_ID: ${{ secrets.TIMEX_EMPLOYEE_ID }}
@@ -29,3 +30,17 @@ jobs:
           LOCATION_LAT: ${{ secrets.TIMEX_LOCATION_LAT }}
           LOCATION_LNG: ${{ secrets.TIMEX_LOCATION_LNG }}
           LOCATION_NAME: ${{ secrets.TIMEX_LOCATION_NAME }}
+
+      - name: Notify Success
+        if: success()
+        run: |
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+            -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+            -d text="✅ TimeX Check-in สำเร็จค่ะ ($(date '+%H:%M:%S'))"
+
+      - name: Notify Failure
+        if: failure()
+        run: |
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+            -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+            -d text="❌ TimeX Check-in ล้มเหลวค่ะ ($(date '+%H:%M:%S'))"
