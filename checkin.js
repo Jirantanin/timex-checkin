@@ -1,34 +1,44 @@
 const OTPAuth = require('otpauth');
 
-// ========== CONFIG ==========
 const CONFIG = {
   EMPLOYEE_ID: process.env.EMPLOYEE_ID,
   PASSWORD: process.env.PASSWORD,
   SECRET_KEY: process.env.SECRET_KEY,
   API_BASE: 'https://timex.techsoftholding.co.th/LeaveSystemAPI/api',
+  ATTENDANCE_API_BASE: 'https://timex.techsoftholding.co.th/api',
   LOCATION: {
     lat: parseFloat(process.env.LOCATION_LAT),
     lng: parseFloat(process.env.LOCATION_LNG),
     name: process.env.LOCATION_NAME
-  }
+  },
+  MANUAL_CHECKIN_REASON: 'Auto check-in by GitHub Actions'
 };
 
 if (!CONFIG.EMPLOYEE_ID || !CONFIG.PASSWORD || !CONFIG.SECRET_KEY) {
-  console.error('❌ Missing required env: EMPLOYEE_ID, PASSWORD, SECRET_KEY');
+  console.error('Missing required env: EMPLOYEE_ID, PASSWORD, SECRET_KEY');
   process.exit(1);
 }
-// ============================
 
-async function httpPost(path, data, token = null) {
+async function parseResponseBody(res) {
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+}
+
+async function httpPost(baseUrl, path, data, token = null) {
   const headers = { 'Content-Type': 'application/json' };
-  if (token) headers['Authorization'] = `Bearer ${token}`;
+  if (token) headers.Authorization = `Bearer ${token}`;
 
-  const res = await fetch(CONFIG.API_BASE + path, {
+  const res = await fetch(baseUrl + path, {
     method: 'POST',
     headers,
     body: JSON.stringify(data)
   });
-  return { status: res.status, body: await res.json() };
+
+  return { status: res.status, body: await parseResponseBody(res) };
 }
 
 async function httpGet(path) {
@@ -36,11 +46,12 @@ async function httpGet(path) {
     method: 'GET',
     headers: { 'Content-Type': 'application/json' }
   });
-  return { status: res.status, body: await res.json() };
+
+  return { status: res.status, body: await parseResponseBody(res) };
 }
 
 function generateOTP() {
-  let totp = new OTPAuth.TOTP({
+  const totp = new OTPAuth.TOTP({
     issuer: 'LeaveSystem',
     label: 'User',
     algorithm: 'SHA1',
@@ -57,103 +68,138 @@ function toDateStr(date) {
 
 function isTodayHoliday(holidays) {
   const today = toDateStr(new Date());
-  return holidays.find(h => {
-    const holDate = new Date(h.holidayDate).toISOString().split('T')[0];
-    return holDate === today;
+  return holidays.find((holiday) => {
+    const holidayDate = new Date(holiday.holidayDate).toISOString().split('T')[0];
+    return holidayDate === today;
   });
 }
 
 function hasApprovedOrPendingLeaveToday(leaves) {
-  const today = new Date();
-  const todayStr = toDateStr(today);
-  return leaves.find(l => {
-    if (!['Approved', 'Pending'].includes(l.status)) return false;
-    const start = new Date(l.startDate).toISOString().split('T')[0];
-    const end = new Date(l.endDate).toISOString().split('T')[0];
+  const todayStr = toDateStr(new Date());
+  return leaves.find((leave) => {
+    if (!['Approved', 'Pending'].includes(leave.status)) return false;
+    const start = new Date(leave.startDate).toISOString().split('T')[0];
+    const end = new Date(leave.endDate).toISOString().split('T')[0];
     return todayStr >= start && todayStr <= end;
   });
 }
 
+function getBangkokDateParts() {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Bangkok',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  });
+
+  const parts = formatter.formatToParts(new Date());
+  const year = parts.find((part) => part.type === 'year')?.value;
+  const month = parts.find((part) => part.type === 'month')?.value;
+  const day = parts.find((part) => part.type === 'day')?.value;
+
+  if (!year || !month || !day) {
+    throw new Error('Could not resolve current Asia/Bangkok date');
+  }
+
+  return { year, month, day };
+}
+
+function getManualCheckinDateTime() {
+  const { year, month, day } = getBangkokDateParts();
+  return `${year}-${month}-${day}T09:40:00+07:00`;
+}
+
 async function checkPreConditions() {
-  // Check holiday
-  console.log('🔵 เช็ควันหยุด...');
+  console.log('Checking holidays...');
   const holidaysRes = await httpGet('/leave/holidays');
   const holiday = isTodayHoliday(holidaysRes.body || []);
   if (holiday) {
-    console.log(`⏭️ วันนี้ (${holiday.holidayDate}) ตรงกับ "${holiday.holidayName}" — ข้าม check-in`);
-    return { skipped: true, reason: `วันหยุด: ${holiday.holidayName}` };
+    console.log(`Skip check-in because today is holiday: ${holiday.holidayName}`);
+    return { skipped: true, reason: `Holiday: ${holiday.holidayName}` };
   }
 
-  // Check approved or pending leave
-  console.log('🔵 เช็ควันลา...');
+  console.log('Checking leave requests...');
   const leavesRes = await httpGet(`/Leave/User/${CONFIG.EMPLOYEE_ID}`);
-  const leaves = leavesRes.body || [];
-  const leave = hasApprovedOrPendingLeaveToday(leaves);
+  const leave = hasApprovedOrPendingLeaveToday(leavesRes.body || []);
   if (leave) {
-    const statusText = leave.status === 'Pending' ? 'รออนุมัติ' : 'อนุมัติแล้ว';
-    console.log(`⏭️ วันนี้ตรงกับ "${leave.leaveTypeName || leave.typeName}" (${statusText}) — ข้าม check-in`);
-    return { skipped: true, reason: `${leave.leaveTypeName || leave.typeName} (${statusText}): ${leave.reason}` };
+    const statusText = leave.status === 'Pending' ? 'Pending' : 'Approved';
+    console.log(`Skip check-in because leave exists: ${leave.leaveTypeName || leave.typeName} (${statusText})`);
+    return {
+      skipped: true,
+      reason: `${leave.leaveTypeName || leave.typeName} (${statusText}): ${leave.reason}`
+    };
   }
 
   return { skipped: false };
 }
 
 async function checkin() {
-  // Pre-check: holiday & approved leave
   const pre = await checkPreConditions();
   if (pre.skipped) {
     return { success: true, skipped: true, message: pre.reason };
   }
 
-  console.log('🔵 Login...');
-  const login = await httpPost('/auth/login', {
+  console.log('Login...');
+  const login = await httpPost(CONFIG.API_BASE, '/auth/login', {
     userId: CONFIG.EMPLOYEE_ID,
     password: CONFIG.PASSWORD
   });
   if (login.status !== 200) {
-    console.log('❌ Login failed:', login.body);
     return { success: false, error: 'Login failed', detail: login.body };
   }
 
-  console.log('🔑 Generate OTP...');
+  console.log('Generate OTP...');
   const otp = generateOTP();
-  console.log('   OTP:', otp);
 
-  console.log('🔵 Verify OTP...');
-  const verify = await httpPost('/auth/verify-2fa', {
+  console.log('Verify OTP...');
+  const verify = await httpPost(CONFIG.API_BASE, '/auth/verify-2fa', {
     userId: CONFIG.EMPLOYEE_ID,
     code: otp
   });
   if (verify.status !== 200 || !verify.body.token) {
-    console.log('❌ OTP verify failed:', verify.body);
     return { success: false, error: 'OTP verify failed', detail: verify.body };
   }
-  const token = verify.body.token;
 
-  console.log(`📍 Check-in: ${CONFIG.LOCATION.name} (${CONFIG.LOCATION.lat}, ${CONFIG.LOCATION.lng})`);
-  const ci = await httpPost('/Attendance/checkin', {
-    UserId: CONFIG.EMPLOYEE_ID,
-    Latitude: CONFIG.LOCATION.lat,
-    Longitude: CONFIG.LOCATION.lng,
-    LocationName: CONFIG.LOCATION.name
-  }, token);
+  const selectedDateTime = getManualCheckinDateTime();
+  console.log(`Manual check-in at ${selectedDateTime}`);
+  console.log(`Location: ${CONFIG.LOCATION.name} (${CONFIG.LOCATION.lat}, ${CONFIG.LOCATION.lng})`);
 
-  if (ci.status === 200) {
-    console.log('✅ Check-in success!');
-    return { success: true, message: 'Check-in สำเร็จ!', detail: ci.body };
-  } else {
-    console.log('❌ Check-in failed:', ci.body);
-    return { success: false, error: ci.body?.message || ci.body || 'Check-in failed', detail: ci.body };
+  const checkinRes = await httpPost(
+    CONFIG.ATTENDANCE_API_BASE,
+    '/Attendance/manual-checkin',
+    {
+      userId: CONFIG.EMPLOYEE_ID,
+      selectedDateTime,
+      reason: CONFIG.MANUAL_CHECKIN_REASON,
+      lat: CONFIG.LOCATION.lat,
+      long: CONFIG.LOCATION.lng
+    },
+    verify.body.token
+  );
+
+  if (checkinRes.status === 200) {
+    return {
+      success: true,
+      message: 'Manual check-in success',
+      selectedDateTime,
+      detail: checkinRes.body
+    };
   }
+
+  return {
+    success: false,
+    error: checkinRes.body?.message || checkinRes.body || 'Manual check-in failed',
+    selectedDateTime,
+    detail: checkinRes.body
+  };
 }
 
-// Run and exit
 checkin()
-  .then(r => {
-    console.log('\n📋 Result:', JSON.stringify(r, null, 2));
-    process.exit(r.success ? 0 : 1);
+  .then((result) => {
+    console.log('\nResult:', JSON.stringify(result, null, 2));
+    process.exit(result.success ? 0 : 1);
   })
-  .catch(err => {
-    console.error('❌ Error:', err.message);
+  .catch((err) => {
+    console.error('Error:', err.message);
     process.exit(1);
   });
