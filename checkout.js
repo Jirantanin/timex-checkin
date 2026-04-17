@@ -51,25 +51,58 @@ function generateOTP() {
   return totp.generate();
 }
 
-function toDateStr(date) {
-  return date.toISOString().split('T')[0];
+function getBangkokDateStr(date = new Date()) {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Bangkok',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  });
+
+  const parts = formatter.formatToParts(date);
+  const year = parts.find((part) => part.type === 'year')?.value;
+  const month = parts.find((part) => part.type === 'month')?.value;
+  const day = parts.find((part) => part.type === 'day')?.value;
+
+  if (!year || !month || !day) {
+    throw new Error('Could not resolve Asia/Bangkok date');
+  }
+
+  return `${year}-${month}-${day}`;
+}
+
+function normalizeApiDateStr(value) {
+  if (!value) return null;
+
+  const isoLikeMatch = String(value).match(/^(\d{4}-\d{2}-\d{2})/);
+  if (isoLikeMatch) return isoLikeMatch[1];
+
+  const slashDateMatch = String(value).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (slashDateMatch) {
+    const [, month, day, year] = slashDateMatch;
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return getBangkokDateStr(parsed);
 }
 
 function isTodayHoliday(holidays) {
-  const today = toDateStr(new Date());
+  const today = getBangkokDateStr();
   return holidays.find(h => {
-    const holDate = new Date(h.holidayDate).toISOString().split('T')[0];
+    const holDate = normalizeApiDateStr(h.holidayDate);
     return holDate === today;
   });
 }
 
 function hasApprovedOrPendingLeaveToday(leaves) {
-  const today = new Date();
-  const todayStr = toDateStr(today);
+  const todayStr = getBangkokDateStr();
   return leaves.find(l => {
     if (!['Approved', 'Pending'].includes(l.status)) return false;
-    const start = new Date(l.startDate).toISOString().split('T')[0];
-    const end = new Date(l.endDate).toISOString().split('T')[0];
+    const start = normalizeApiDateStr(l.startDate);
+    const end = normalizeApiDateStr(l.endDate);
+    if (!start || !end) return false;
     return todayStr >= start && todayStr <= end;
   });
 }

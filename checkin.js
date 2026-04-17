@@ -62,29 +62,7 @@ function generateOTP() {
   return totp.generate();
 }
 
-function toDateStr(date) {
-  return date.toISOString().split('T')[0];
-}
-
-function isTodayHoliday(holidays) {
-  const today = toDateStr(new Date());
-  return holidays.find((holiday) => {
-    const holidayDate = new Date(holiday.holidayDate).toISOString().split('T')[0];
-    return holidayDate === today;
-  });
-}
-
-function hasApprovedOrPendingLeaveToday(leaves) {
-  const todayStr = toDateStr(new Date());
-  return leaves.find((leave) => {
-    if (!['Approved', 'Pending'].includes(leave.status)) return false;
-    const start = new Date(leave.startDate).toISOString().split('T')[0];
-    const end = new Date(leave.endDate).toISOString().split('T')[0];
-    return todayStr >= start && todayStr <= end;
-  });
-}
-
-function getBangkokDateParts() {
+function getBangkokDateStr(date = new Date()) {
   const formatter = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Bangkok',
     year: 'numeric',
@@ -92,15 +70,57 @@ function getBangkokDateParts() {
     day: '2-digit'
   });
 
-  const parts = formatter.formatToParts(new Date());
+  const parts = formatter.formatToParts(date);
   const year = parts.find((part) => part.type === 'year')?.value;
   const month = parts.find((part) => part.type === 'month')?.value;
   const day = parts.find((part) => part.type === 'day')?.value;
 
   if (!year || !month || !day) {
-    throw new Error('Could not resolve current Asia/Bangkok date');
+    throw new Error('Could not resolve Asia/Bangkok date');
   }
 
+  return `${year}-${month}-${day}`;
+}
+
+function normalizeApiDateStr(value) {
+  if (!value) return null;
+
+  const isoLikeMatch = String(value).match(/^(\d{4}-\d{2}-\d{2})/);
+  if (isoLikeMatch) return isoLikeMatch[1];
+
+  const slashDateMatch = String(value).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (slashDateMatch) {
+    const [, month, day, year] = slashDateMatch;
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return getBangkokDateStr(parsed);
+}
+
+function isTodayHoliday(holidays) {
+  const today = getBangkokDateStr();
+  return holidays.find((holiday) => {
+    const holidayDate = normalizeApiDateStr(holiday.holidayDate);
+    return holidayDate === today;
+  });
+}
+
+function hasApprovedOrPendingLeaveToday(leaves) {
+  const todayStr = getBangkokDateStr();
+  return leaves.find((leave) => {
+    if (!['Approved', 'Pending'].includes(leave.status)) return false;
+    const start = normalizeApiDateStr(leave.startDate);
+    const end = normalizeApiDateStr(leave.endDate);
+    if (!start || !end) return false;
+    return todayStr >= start && todayStr <= end;
+  });
+}
+
+function getBangkokDateParts() {
+  const dateStr = getBangkokDateStr();
+  const [year, month, day] = dateStr.split('-');
   return { year, month, day };
 }
 
