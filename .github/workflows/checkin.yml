@@ -25,8 +25,11 @@ jobs:
       - name: Run check-in
         id: checkin
         run: |
+          set +e
           node checkin.js 2>&1 | tee checkin.log
-          echo "exit_code=$?" >> $GITHUB_OUTPUT
+          EXIT_CODE=$?
+          echo "exit_code=$EXIT_CODE" >> $GITHUB_OUTPUT
+          exit 0
         env:
           EMPLOYEE_ID: ${{ secrets.TIMEX_EMPLOYEE_ID }}
           PASSWORD: ${{ secrets.TIMEX_PASSWORD }}
@@ -35,31 +38,49 @@ jobs:
           LOCATION_LNG: ${{ secrets.TIMEX_LOCATION_LNG }}
           LOCATION_NAME: ${{ secrets.TIMEX_LOCATION_NAME }}
 
-      - name: Notify Skipped (Holiday / Leave)
-        if: success()
+      - name: Notify Result
+        if: always()
         run: |
+          EXIT_CODE="${{ steps.checkin.outputs.exit_code }}"
           SKIPPED=$(grep -c '"skipped": true' checkin.log || true)
+          MESSAGE=$(grep '"message":' checkin.log | tail -1 | sed 's/.*"message": *"\?//' | sed 's/"\?.*//' || true)
+          ERROR_DETAIL=$(grep '"error":' checkin.log | tail -1 | sed 's/.*"error": *"\?//' | sed 's/"\?.*//' || true)
+
           if [ "$SKIPPED" != "0" ]; then
-            SKIP_REASON=$(grep '"message":' checkin.log | head -1 | sed 's/.*"message": *"\?//' | sed 's/"\?.*//')
+            SKIP_REASON="$MESSAGE"
+            if [ -z "$SKIP_REASON" ]; then
+              SKIP_REASON="Holiday or leave"
+            fi
             curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
               -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
               -d text="TimeX Check-in skipped ($(date '+%H:%M:%S'))\n$SKIP_REASON"
+          elif [ "${EXIT_CODE:-1}" = "0" ]; then
+            SUCCESS_DETAIL="$MESSAGE"
+            if [ -n "$SUCCESS_DETAIL" ]; then
+              curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+                -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+                -d text="TimeX Check-in success ($(date '+%H:%M:%S'))\n$SUCCESS_DETAIL"
+            else
+              curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+                -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+                -d text="TimeX Check-in success ($(date '+%H:%M:%S'))"
+            fi
           else
+            if [ -z "$ERROR_DETAIL" ]; then
+              ERROR_DETAIL=$(grep -E "Error:" checkin.log | tail -1 | sed 's/Error://g' | xargs || true)
+            fi
+            if [ -z "$ERROR_DETAIL" ]; then
+              ERROR_DETAIL="$MESSAGE"
+            fi
+            if [ -z "$ERROR_DETAIL" ]; then
+              ERROR_DETAIL="Unknown error"
+            fi
             curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
               -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
-              -d text="TimeX Check-in success ($(date '+%H:%M:%S'))"
+              -d text="TimeX Check-in failed ($(date '+%H:%M:%S'))\nReason: $ERROR_DETAIL"
           fi
 
-      - name: Notify Failure
-        if: failure()
+      - name: Fail job when script failed
+        if: always() && steps.checkin.outputs.exit_code != '0'
         run: |
-          ERROR_DETAIL=$(grep '"error":' checkin.log | head -1 | sed 's/.*"error": *"\?//' | sed 's/"\?.*//')
-          if [ -z "$ERROR_DETAIL" ]; then
-            ERROR_DETAIL=$(grep -E "Error:" checkin.log | head -1 | sed 's/Error://g' | xargs)
-          fi
-          if [ -z "$ERROR_DETAIL" ]; then
-            ERROR_DETAIL="Unknown error"
-          fi
-          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
-            -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
-            -d text="TimeX Check-in failed ($(date '+%H:%M:%S'))\nReason: $ERROR_DETAIL"
+          exit 1
